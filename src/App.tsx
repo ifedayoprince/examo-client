@@ -14,7 +14,9 @@ import {
   RotateCcw,
   UploadCloud,
   FileCheck,
-  AlertCircle
+  AlertCircle,
+  Zap,
+  ZapOff
 } from 'lucide-react';
 import { db, compressPhoto } from './db';
 import { type ScanItem, type ExamGroup } from './types';
@@ -188,6 +190,30 @@ export default function App() {
     }
   };
 
+  const [flashOn, setFlashOn] = useState<boolean>(false);
+
+  const toggleFlash = async () => {
+    if (!cameraStream) return;
+    const track = cameraStream.getVideoTracks()[0];
+    if (!track) return;
+    try {
+      const capabilities = track.getCapabilities ? track.getCapabilities() : {};
+      // @ts-ignore
+      if (capabilities.torch !== undefined) {
+        const newFlashState = !flashOn;
+        await track.applyConstraints({
+          advanced: [{ torch: newFlashState } as any]
+        });
+        setFlashOn(newFlashState);
+      } else {
+        showBriefToast('Flash/Torch is not supported on this camera device.');
+      }
+    } catch (err) {
+      console.warn('Could not toggle flash:', err);
+      showBriefToast('Camera flash control error.');
+    }
+  };
+
   const stopCamera = () => {
     if (cameraStream) {
       cameraStream.getTracks().forEach(track => track.stop());
@@ -196,6 +222,7 @@ export default function App() {
     if (videoRef.current) {
       videoRef.current.srcObject = null;
     }
+    setFlashOn(false);
   };
 
   // Capture Photo action using video feed frame
@@ -556,16 +583,10 @@ export default function App() {
   ).length;
 
   return (
-    <div className="min-h-screen bg-[#0F172A] flex flex-col items-center justify-center p-0 md:p-4 selection:bg-indigo-500 selection:text-white">
+    <div className="min-h-screen bg-[#0F172A] flex flex-col items-center justify-center p-0 selection:bg-indigo-500 selection:text-white">
       
-      {/* PHONE WRAPPER - Looks gorgeous, avoids brutalist pixelation, is very neat and fits screen perfectly */}
-      <div className="w-full max-w-md h-[100dvh] md:h-[840px] bg-black md:rounded-[44px] md:p-3 shadow-2xl relative flex flex-col overflow-hidden border-2 md:border-4 border-slate-800">
-        
-        {/* Physical phone ear speaker/notch simulation */}
-        <div className="absolute top-1.5 left-1/2 -translate-x-1/2 w-32 h-4.5 bg-black rounded-full z-40 hidden md:block" />
-
-        {/* Dynamic App Container inside phone screen */}
-        <div className="flex-1 h-full w-full bg-[#FAF9F6] text-[#0F172A] relative flex flex-col justify-between overflow-hidden md:rounded-[32px]">
+      {/* Dynamic App Container - full height and centralized on desktop, full height and width on mobile */}
+      <div className="w-full md:max-w-md h-[100dvh] bg-[#FAF9F6] text-[#0F172A] relative flex flex-col justify-between overflow-hidden shadow-2xl">
           
           {/* Header Overlay - absolute top floating to keep layout entirely snapchat-like */}
           <header className="absolute top-0 left-0 right-0 h-16 bg-white/70 backdrop-blur-md border-b border-gray-200/50 px-4 flex justify-between items-center z-30 select-none">
@@ -612,13 +633,29 @@ export default function App() {
                   {useLiveCamera ? (
                     <div className="w-full h-full relative bg-zinc-950 flex items-center justify-center">
                       {cameraAvailable ? (
-                        <video 
-                          ref={videoRef}
-                          autoPlay 
-                          playsInline 
-                          muted 
-                          className="w-full h-full object-cover transition-opacity duration-300"
-                        />
+                        <>
+                          <video 
+                            ref={videoRef}
+                            autoPlay 
+                            playsInline 
+                            muted 
+                            className="w-full h-full object-cover transition-opacity duration-300"
+                          />
+                          {cameraStream && (
+                            <button
+                              type="button"
+                              onClick={toggleFlash}
+                              className="absolute top-4 right-4 z-30 bg-black/60 hover:bg-black/85 text-white p-3 rounded-full backdrop-blur-md transition-all border border-white/10 active:scale-95 shadow-md flex items-center justify-center"
+                              title={flashOn ? "Turn off flash" : "Turn on flash"}
+                            >
+                              {flashOn ? (
+                                <Zap className="w-5 h-5 text-yellow-400 fill-yellow-400 animate-pulse" />
+                              ) : (
+                                <ZapOff className="w-5 h-5 text-white" />
+                              )}
+                            </button>
+                          )}
+                        </>
                       ) : (
                         <div className="text-zinc-400 font-mono text-center px-6">
                           <AlertCircle className="w-10 h-10 text-rose-500 mx-auto mb-2.5" />
@@ -1200,7 +1237,6 @@ export default function App() {
           )}
 
         </div>
-      </div>
 
     </div>
   );
