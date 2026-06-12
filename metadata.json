@@ -1,0 +1,10 @@
+{
+  "name": "Examo Client",
+  "description": "A high-contrast Neo-Brutalist document batching client. Scan exam scripts, structure pages with boundary covers, and compile custom PDFs entirely client-side using robust IndexedDB storage.",
+  "requestFramePermissions": [
+    "camera"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
