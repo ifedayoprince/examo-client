@@ -100,7 +100,7 @@ export async function generateBatchPDF(
         
         // Render image in pure white block, taking maximum printable container bounds
         // Offset padding around edges to match clean scan styles (12mm bounds)
-        const margin = 12;
+        const margin = 4;
         const imgWidth = pageWidth - (margin * 2);
         const imgHeight = pageHeight - (margin * 2);
         
