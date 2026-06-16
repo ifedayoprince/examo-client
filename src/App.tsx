@@ -34,6 +34,9 @@ export default function App() {
   const [isBoundaryModalOpen, setIsBoundaryModalOpen] = useState<boolean>(false);
   const [isDeletingGroup, setIsDeletingGroup] = useState<string | null>(null);
   const [isDeletingSingleItem, setIsDeletingSingleItem] = useState<string | null>(null);
+  const [retakeItemId, setRetakeItemId] = useState<string | null>(null);
+  const [activeExamGroupIdForScanning, setActiveExamGroupIdForScanning] = useState<string | null>(null);
+  const [previewItemId, setPreviewItemId] = useState<string | null>(null);
 
   // PDF Compilation Result States
   const [viewMode, setViewMode] = useState<'capture' | 'completed'>('capture');
@@ -235,13 +238,36 @@ export default function App() {
 
     try {
       const video = videoRef.current;
+      const vWidth = video.videoWidth || 1024;
+      const vHeight = video.videoHeight || 768;
+
+      // Force strict aspect ratio cropping (3:4 for portrait, 4:3 for landscape)
+      const isPortrait = vHeight > vWidth;
+      const targetRatio = isPortrait ? 3/4 : 4/3;
+
+      let sWidth = vWidth;
+      let sHeight = vHeight;
+      let sx = 0;
+      let sy = 0;
+
+      const currentRatio = vWidth / vHeight;
+      if (currentRatio > targetRatio) {
+        // Stream is wider than target ratio - crop sides
+        sWidth = vHeight * targetRatio;
+        sx = (vWidth - sWidth) / 2;
+      } else {
+        // Stream is taller than target ratio - crop top/bottom
+        sHeight = vWidth / targetRatio;
+        sy = (vHeight - sHeight) / 2;
+      }
+
       const canvas = document.createElement('canvas');
-      canvas.width = video.videoWidth || 1024;
-      canvas.height = video.videoHeight || 768;
+      canvas.width = isPortrait ? 1536 : 2048;
+      canvas.height = isPortrait ? 2048 : 1536;
 
       const ctx = canvas.getContext('2d');
       if (ctx) {
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        ctx.drawImage(video, sx, sy, sWidth, sHeight, 0, 0, canvas.width, canvas.height);
         canvas.toBlob(async (blob) => {
           if (blob) {
             const compressed = await compressPhoto(blob, 2048);
@@ -282,104 +308,104 @@ export default function App() {
   // Generate a premium, highly realistic hand-drawn simulated exam paper sheet for desktop testing
   const captureMockSheet = async () => {
     const canvas = document.createElement('canvas');
-    canvas.width = 1000;
-    canvas.height = 1400;
+    canvas.width = 900;
+    canvas.height = 1200; // 3:4 Aspect Ratio (4:3 portrait)
     const ctx = canvas.getContext('2d');
 
     if (ctx) {
       // White page background
       ctx.fillStyle = '#FFFFFF';
-      ctx.fillRect(0, 0, 1000, 1400);
+      ctx.fillRect(0, 0, 900, 1200);
 
       // Clean elegant page header area
       ctx.fillStyle = '#F3F4F6';
-      ctx.fillRect(60, 60, 880, 160);
+      ctx.fillRect(50, 50, 800, 140);
 
       // Student metadata placeholders
       ctx.fillStyle = '#111827';
-      ctx.font = 'bold 32px sans-serif';
-      ctx.fillText('EXAM ANSWER DOCUMENT', 100, 120);
+      ctx.font = 'bold 28px sans-serif';
+      ctx.fillText('EXAM ANSWER DOCUMENT', 80, 100);
 
       ctx.fillStyle = '#4B5563';
-      ctx.font = '20px monospace';
-      ctx.fillText('CANDIDATE ID: EXM-34081-PL', 100, 160);
-      ctx.fillText(`DATE: ${new Date().toLocaleDateString()}`, 100, 190);
+      ctx.font = '18px monospace';
+      ctx.fillText('CANDIDATE ID: EXM-34081-PL', 80, 135);
+      ctx.fillText(`DATE: ${new Date().toLocaleDateString()}`, 80, 165);
 
       // Highlight badge
       ctx.fillStyle = '#10B981';
-      ctx.fillRect(720, 100, 160, 80);
+      ctx.fillRect(660, 80, 140, 70);
       ctx.fillStyle = '#FFFFFF';
-      ctx.font = 'bold 24px sans-serif';
-      ctx.fillText('PAGE SCAN', 740, 145);
+      ctx.font = 'bold 20px sans-serif';
+      ctx.fillText('PAGE SCAN', 675, 120);
 
       // Ruled guidelines
       ctx.strokeStyle = '#E5E7EB';
       ctx.lineWidth = 1.5;
-      for (let y = 280; y < 1300; y += 45) {
+      for (let y = 240; y < 1100; y += 40) {
         ctx.beginPath();
-        ctx.moveTo(60, y);
-        ctx.lineTo(940, y);
+        ctx.moveTo(50, y);
+        ctx.lineTo(850, y);
         ctx.stroke();
       }
 
       // Simulated handwriting
       ctx.fillStyle = '#1D4ED8'; // Hand-written blue ink style
-      ctx.font = 'italic 22px "Georgia", serif';
-      ctx.fillText('Question 1: Elaborate on the design limits of standard mobile memory state caches.', 90, 315);
+      ctx.font = 'italic 20px "Georgia", serif';
+      ctx.fillText('Question 1: Elaborate on the design limits of standard mobile memory state caches.', 80, 275);
 
-      ctx.fillText('Answer: In web ecosystems, tab caching is vulnerable to browser garbage collection loops.', 90, 360);
-      ctx.fillText('Thus, using IndexDB prevents transaction failures in offline conditions.', 90, 405);
+      ctx.fillText('Answer: In web ecosystems, tab caching is vulnerable to browser garbage collection loops.', 80, 315);
+      ctx.fillText('Thus, using IndexDB prevents transaction failures in offline conditions.', 80, 355);
 
       // Drawings
       ctx.strokeStyle = '#1D4ED8';
       ctx.lineWidth = 2.5;
       ctx.beginPath();
-      ctx.arc(800, 420, 45, 0, Math.PI * 2);
+      ctx.arc(720, 370, 40, 0, Math.PI * 2);
       ctx.stroke();
-      ctx.fillText('Correct (98%)', 760, 490);
+      ctx.fillText('Correct (98%)', 680, 430);
 
-      ctx.fillText('Question 2: Create a high fidelity mock representation.', 90, 580);
-      ctx.fillText('Diagram below depicts the flow for dividing exams on-the-fly.', 90, 625);
+      ctx.fillText('Question 2: Create a high fidelity mock representation.', 80, 500);
+      ctx.fillText('Diagram below depicts the flow for dividing exams on-the-fly.', 80, 540);
 
-      // Draw beautiful flowchart container
+      // Draw flowchart container
       ctx.strokeStyle = '#1D4ED8';
       ctx.fillStyle = '#EFF6FF';
-      ctx.fillRect(200, 700, 240, 120);
-      ctx.strokeRect(200, 700, 240, 120);
+      ctx.fillRect(180, 600, 220, 100);
+      ctx.strokeRect(180, 600, 220, 100);
 
       ctx.fillStyle = '#1D4ED8';
-      ctx.font = 'bold 18px monospace';
-      ctx.fillText('SCAN PAGES 1 & 2', 230, 750);
-      ctx.fillText('[Local Blob Cached]', 225, 780);
+      ctx.font = 'bold 16px monospace';
+      ctx.fillText('SCAN PAGES 1 & 2', 205, 645);
+      ctx.fillText('[Local Blob Cached]', 200, 670);
 
       // Arrow
       ctx.beginPath();
-      ctx.moveTo(440, 760);
-      ctx.lineTo(540, 760);
+      ctx.moveTo(400, 650);
+      ctx.lineTo(500, 650);
       ctx.stroke();
 
       ctx.fillStyle = '#F0FDF4';
-      ctx.fillRect(540, 700, 260, 120);
-      ctx.strokeRect(540, 700, 260, 120);
+      ctx.fillRect(500, 600, 240, 100);
+      ctx.strokeRect(500, 600, 240, 100);
 
       ctx.fillStyle = '#065F46';
-      ctx.font = 'bold 18px monospace';
-      ctx.fillText('CLICK DONE & BOUNDARY', 560, 750);
-      ctx.fillText('[Insert White Divider]', 565, 780);
+      ctx.font = 'bold 16px monospace';
+      ctx.fillText('CLICK DONE & BOUNDARY', 515, 645);
+      ctx.fillText('[Insert White Divider]', 520, 670);
 
       // Text section page 2
       ctx.fillStyle = '#1D4ED8';
-      ctx.font = 'italic 22px "Georgia", serif';
-      ctx.fillText('All exam sequences output cleanly according to chronological timeline slots.', 90, 920);
-      ctx.fillText('By choosing custom input labels, multiple school scripts compile safely.', 90, 965);
+      ctx.font = 'italic 20px "Georgia", serif';
+      ctx.fillText('All exam sequences output cleanly according to chronological timeline slots.', 80, 780);
+      ctx.fillText('By choosing custom input labels, multiple school scripts compile safely.', 80, 820);
 
       // Signature / stamp at footer page
       ctx.strokeStyle = '#10B981';
-      ctx.strokeRect(650, 1080, 240, 100);
+      ctx.strokeRect(580, 950, 220, 90);
       ctx.fillStyle = '#10B981';
-      ctx.font = 'bold 20px monospace';
-      ctx.fillText('EXAMO CERTIFICATION', 670, 1120);
-      ctx.fillText('VERIFIED ORIGINAL', 680, 1150);
+      ctx.font = 'bold 18px monospace';
+      ctx.fillText('EXAMO CERTIFICATION', 595, 985);
+      ctx.fillText('VERIFIED ORIGINAL', 605, 1015);
 
       // Save canvas to db as blob
       canvas.toBlob(async (blob) => {
@@ -394,13 +420,52 @@ export default function App() {
 
   // Save scan page to db
   const saveCapturedImage = async (imageBlob: Blob) => {
-    const newItem: ScanItem = {
-      id: `scan-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-      type: 'image',
-      fileData: imageBlob,
-      timestamp: Date.now()
-    };
-    await db.scans.add(newItem);
+    if (retakeItemId) {
+      await db.scans.update(retakeItemId, { fileData: imageBlob });
+      setRetakeItemId(null);
+      showBriefToast('Page successfully replaced');
+    } else if (activeExamGroupIdForScanning) {
+      const boundaryItem = items.find(item => item.id === activeExamGroupIdForScanning);
+      if (boundaryItem) {
+        // Find boundary and previous boundary to place the scan in the correct group slot
+        const sortedItems = [...items].sort((a, b) => a.timestamp - b.timestamp);
+        const bIdx = sortedItems.findIndex(item => item.id === boundaryItem.id);
+        const prevB = sortedItems.slice(0, bIdx).reverse().find(item => item.type === 'boundary');
+        const minTime = prevB ? prevB.timestamp : 0;
+        const maxTime = boundaryItem.timestamp;
+
+        const groupImages = sortedItems.filter(
+          item => item.type === 'image' && item.timestamp > minTime && item.timestamp < maxTime
+        );
+
+        let targetTime = groupImages.length > 0
+          ? groupImages[groupImages.length - 1].timestamp + 1
+          : minTime + 1;
+
+        if (targetTime >= maxTime) {
+          // If we collide with the boundary time, push it slightly forward
+          const newMaxTime = Date.now();
+          await db.scans.update(boundaryItem.id, { timestamp: newMaxTime });
+          targetTime = newMaxTime - 1;
+        }
+
+        const newItem: ScanItem = {
+          id: `scan-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+          type: 'image',
+          fileData: imageBlob,
+          timestamp: targetTime
+        };
+        await db.scans.add(newItem);
+      }
+    } else {
+      const newItem: ScanItem = {
+        id: `scan-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+        type: 'image',
+        fileData: imageBlob,
+        timestamp: Date.now()
+      };
+      await db.scans.add(newItem);
+    }
     await refreshItemsFromDB();
   };
 
@@ -487,6 +552,40 @@ export default function App() {
       await refreshItemsFromDB();
     } catch (err) {
       console.error('Failed to purge group:', err);
+    }
+  };
+
+  const handleRetakeExam = async (group: ExamGroup) => {
+    if (window.confirm(`Are you sure you want to retake the exam for ${group.subject || 'this section'}? This will clear all its scanned pages so you can scan them again.`)) {
+      try {
+        const boundaryItem = group.items.find(item => item.type === 'boundary');
+        if (!boundaryItem) return;
+
+        // Find boundary and previous boundary to isolate images
+        const sortedItems = [...items].sort((a, b) => a.timestamp - b.timestamp);
+        const bIdx = sortedItems.findIndex(item => item.id === boundaryItem.id);
+        const prevB = sortedItems.slice(0, bIdx).reverse().find(item => item.type === 'boundary');
+        const minTime = prevB ? prevB.timestamp : 0;
+        const maxTime = boundaryItem.timestamp;
+
+        // Delete all images within the timestamp range
+        const toDelete = items.filter(
+          item => item.type === 'image' && item.timestamp > minTime && item.timestamp < maxTime
+        );
+
+        for (const item of toDelete) {
+          await db.scans.delete(item.id);
+        }
+
+        // Set the active exam group for scanning
+        setActiveExamGroupIdForScanning(boundaryItem.id);
+        setIsManagerOpen(false); // Switch back to camera Viewfinder
+        await refreshItemsFromDB();
+        showBriefToast(`Exam cleared. Ready to scan new pages for ${group.subject || 'this section'}.`);
+      } catch (err) {
+        console.error('Failed to clear exam pages:', err);
+        showBriefToast('Could not clear exam pages.');
+      }
     }
   };
 
@@ -630,10 +729,30 @@ export default function App() {
               {/* Full screen viewfinder backdrop */}
               <div className="absolute inset-0 w-full h-full bg-[#111827] flex items-center justify-center p-0 overflow-hidden">
 
+                {/* Retake Mode HUD Overlay Banner */}
+                {retakeItemId && (() => {
+                  const retakeItemIdx = items.filter(item => item.type === 'image').findIndex(item => item.id === retakeItemId) + 1;
+                  return (
+                    <div className="absolute top-4 left-4 right-4 z-40 bg-amber-600 text-white text-xs font-bold px-4 py-3 rounded-xl shadow-lg border border-amber-500 flex items-center justify-between transition-all">
+                      <span className="flex items-center gap-2">
+                        <RefreshCw className="w-4 h-4 animate-spin text-amber-200" />
+                        RETAKING PAGE P.{retakeItemIdx.toString().padStart(2, '0')}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setRetakeItemId(null)}
+                        className="bg-amber-700 hover:bg-amber-800 text-white px-2.5 py-1 rounded-lg text-[10px] uppercase font-black transition-colors"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  );
+                })()}
+
                 {useLiveCamera ? (
                   <div className="w-full h-full relative bg-zinc-950 flex items-center justify-center">
                     {cameraAvailable ? (
-                      <>
+                      <div className="w-full max-h-full aspect-[3/4] relative bg-black flex items-center justify-center overflow-hidden shadow-inner">
                         <video
                           ref={videoRef}
                           autoPlay
@@ -655,7 +774,7 @@ export default function App() {
                             )}
                           </button>
                         )}
-                      </>
+                      </div>
                     ) : (
                       <div className="text-zinc-400 font-mono text-center px-6">
                         <AlertCircle className="w-10 h-10 text-rose-500 mx-auto mb-2.5" />
@@ -788,9 +907,9 @@ export default function App() {
                           return (
                             <div
                               key={item.id}
-                              onClick={() => setIsDeletingSingleItem(item.id)}
+                              onClick={() => setPreviewItemId(item.id)}
                               className="w-[74px] h-[74px] bg-zinc-800 border border-zinc-700 rounded-xl relative overflow-hidden shrink-0 cursor-pointer shadow-md transition-all hover:scale-95"
-                              title="Delete page"
+                              title="Preview Page"
                             >
                               {imgUrl ? (
                                 <img
@@ -1041,13 +1160,24 @@ export default function App() {
                                 {group.pagesCount.toString().padStart(2, '0')} pgs
                               </td>
                               <td className="py-3.5 px-4 text-center">
-                                <button
-                                  type="button"
-                                  onClick={() => setIsDeletingGroup(group.id)}
-                                  className="text-[10px] font-bold text-rose-600 hover:text-rose-500 hover:bg-rose-50 border border-slate-100 py-1.5 px-2.5 rounded-lg transition-colors cursor-pointer"
-                                >
-                                  Delete
-                                </button>
+                                <div className="flex gap-1.5 justify-center">
+                                  {group.isCompleted && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleRetakeExam(group)}
+                                      className="text-[10px] font-bold text-indigo-600 hover:text-indigo-500 hover:bg-indigo-50 border border-slate-100 py-1.5 px-2.5 rounded-lg transition-colors cursor-pointer"
+                                    >
+                                      Retake
+                                    </button>
+                                  )}
+                                  <button
+                                    type="button"
+                                    onClick={() => setIsDeletingGroup(group.id)}
+                                    className="text-[10px] font-bold text-rose-600 hover:text-rose-500 hover:bg-rose-50 border border-slate-100 py-1.5 px-2.5 rounded-lg transition-colors cursor-pointer"
+                                  >
+                                    Delete
+                                  </button>
+                                </div>
                               </td>
                             </tr>
                           );
@@ -1235,6 +1365,94 @@ export default function App() {
             </div>
           </div>
         )}
+
+        {/* 7. PREVIEW PAGE MODAL */}
+        {previewItemId && (() => {
+          const previewItem = items.find(item => item.id === previewItemId);
+          if (!previewItem) return null;
+          const imgUrl = thumbnailUrls[previewItem.id];
+          const pageIndex = items.filter(item => item.type === 'image').findIndex(item => item.id === previewItemId) + 1;
+          const parentGroup = examGroups.find(g => g.items.some(item => item.id === previewItemId));
+          
+          return (
+            <div className="absolute inset-0 bg-black/95 z-50 flex flex-col justify-between p-4 font-sans text-white">
+              {/* Header */}
+              <div className="flex justify-between items-center py-2 select-none">
+                <span className="text-white font-mono font-black text-sm uppercase tracking-wide">
+                  PAGE PREVIEW (P.{pageIndex.toString().padStart(2, '0')})
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setPreviewItemId(null)}
+                  className="bg-zinc-800 text-white p-2 rounded-full hover:bg-zinc-700 active:scale-95 transition-all cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Main Image View */}
+              <div className="flex-1 w-full flex items-center justify-center overflow-hidden my-4 rounded-2xl bg-zinc-900 border border-zinc-800">
+                {imgUrl ? (
+                  <img
+                    src={imgUrl}
+                    alt="Page preview"
+                    className="max-w-full max-h-full object-contain"
+                  />
+                ) : (
+                  <div className="text-zinc-500 font-mono text-xs">No Image Data</div>
+                )}
+              </div>
+
+              {/* Footer Actions */}
+              <div className="flex flex-col gap-3 font-sans text-xs font-bold w-full max-w-sm mx-auto pb-4 select-none">
+                <div className="flex gap-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setRetakeItemId(previewItemId);
+                      setPreviewItemId(null);
+                      showBriefToast("Retake mode active: snap or upload new page.");
+                    }}
+                    className="flex-1 bg-indigo-600 hover:bg-indigo-500 text-white py-3.5 rounded-xl uppercase tracking-wider shadow-md transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    <RefreshCw className="w-4.5 h-4.5 animate-spin-slow" /> Retake Page
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsDeletingSingleItem(previewItemId);
+                      setPreviewItemId(null);
+                    }}
+                    className="flex-1 bg-rose-600 hover:bg-rose-500 text-white py-3.5 rounded-xl uppercase tracking-wider shadow-md transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    <Trash2 className="w-4.5 h-4.5" /> Delete Page
+                  </button>
+                </div>
+
+                {parentGroup && parentGroup.isCompleted && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      handleRetakeExam(parentGroup);
+                      setPreviewItemId(null);
+                    }}
+                    className="w-full bg-amber-600 hover:bg-amber-500 text-white py-3.5 rounded-xl uppercase tracking-wider shadow-md transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    <RotateCcw className="w-4.5 h-4.5" /> Retake Entire Exam ({parentGroup.subject || 'This Section'})
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => setPreviewItemId(null)}
+                  className="w-full bg-zinc-800 hover:bg-zinc-700 text-zinc-300 py-3.5 rounded-xl uppercase tracking-wider transition-colors cursor-pointer"
+                >
+                  Close Preview
+                </button>
+              </div>
+            </div>
+          );
+        })()}
 
       </div>
 

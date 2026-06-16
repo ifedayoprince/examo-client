@@ -31,18 +31,31 @@ export async function generateBatchPDF(
   scanItems: ScanItem[],
   onProgress?: (progress: number) => void
 ): Promise<{ blob: Blob; filename: string; pageCount: number; sizeBytes: number }> {
-  // Create jsPDF instance (4:3 aspect ratio landscape: 280mm x 210mm)
+  // Detect first orientation to initialize jsPDF correctly
+  let firstOrientation: 'portrait' | 'landscape' = 'portrait';
+  let firstFormat: [number, number] = [210, 280]; // default to 4:3 portrait
+
+  const firstImageItem = scanItems.find(item => item.type === 'image' && item.fileData);
+  if (firstImageItem && firstImageItem.fileData) {
+    try {
+      const base64 = await blobToBase64(firstImageItem.fileData);
+      const { width, height } = await getImageDimensions(base64);
+      if (width > height) {
+        firstOrientation = 'landscape';
+        firstFormat = [280, 210]; // landscape 4:3
+      }
+    } catch (e) {
+      console.error('Failed to read first image dimensions:', e);
+    }
+  }
+
   const pdf = new jsPDF({
-    orientation: 'landscape',
+    orientation: firstOrientation,
     unit: 'mm',
-    format: [280, 210],
+    format: firstFormat,
   });
 
-  const pageWidth = 280;
-  const pageHeight = 210;
-  let isFirstPage = true;
   let processedItems = 0;
-
   const totalSteps = scanItems.length;
 
   const updateProgress = () => {
@@ -55,11 +68,37 @@ export async function generateBatchPDF(
   for (let i = 0; i < scanItems.length; i++) {
     const item = scanItems[i];
 
-    if (!isFirstPage) {
-      pdf.addPage();
-    } else {
-      isFirstPage = false;
+    // Determine the page format and orientation for the current page
+    let pageOrientation: 'portrait' | 'landscape' = firstOrientation;
+    let pageFormat: [number, number] = firstFormat;
+    let base64Data = '';
+    let imgOrigWidth = 0;
+    let imgOrigHeight = 0;
+
+    if (item.type === 'image' && item.fileData) {
+      try {
+        base64Data = await blobToBase64(item.fileData);
+        const dims = await getImageDimensions(base64Data);
+        imgOrigWidth = dims.width;
+        imgOrigHeight = dims.height;
+        if (imgOrigWidth > imgOrigHeight) {
+          pageOrientation = 'landscape';
+          pageFormat = [280, 210];
+        } else {
+          pageOrientation = 'portrait';
+          pageFormat = [210, 280];
+        }
+      } catch (err) {
+        console.error(err);
+      }
     }
+
+    if (i > 0) {
+      pdf.addPage(pageFormat, pageOrientation);
+    }
+
+    const pageWidth = pageOrientation === 'landscape' ? 280 : 210;
+    const pageHeight = pageOrientation === 'landscape' ? 210 : 280;
 
     if (item.type === 'boundary') {
       // 1. Divider cover - A pure white page with just the Class and Subject elegant, centered, and minimal.
@@ -110,17 +149,12 @@ export async function generateBatchPDF(
       }
 
       try {
-        const base64Data = await blobToBase64(item.fileData);
-        
         // Render image in pure white block, taking maximum printable container bounds
         // Offset padding around edges to match clean scan styles (12mm bounds)
         const margin = 4;
         const maxImgWidth = pageWidth - (margin * 2);
         const maxImgHeight = pageHeight - (margin * 2);
 
-        // Preserve aspect ratio
-        const { width: imgOrigWidth, height: imgOrigHeight } = await getImageDimensions(base64Data);
-        
         let printWidth = maxImgWidth;
         let printHeight = maxImgHeight;
         
@@ -167,7 +201,9 @@ export async function generateBatchPDF(
   }
 
   // If empty
-  if (isFirstPage) {
+  if (scanItems.length === 0) {
+    const pageWidth = firstFormat[0];
+    const pageHeight = firstFormat[1];
     pdf.setFillColor(255, 255, 255);
     pdf.rect(0, 0, pageWidth, pageHeight, 'F');
     pdf.setTextColor(100, 116, 139);
