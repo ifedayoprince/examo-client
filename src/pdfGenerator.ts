@@ -17,15 +17,15 @@ export async function generateBatchPDF(
   scanItems: ScanItem[],
   onProgress?: (progress: number) => void
 ): Promise<{ blob: Blob; filename: string; pageCount: number; sizeBytes: number }> {
-  // Create jsPDF instance (A4 size: 210mm x 297mm)
+  // Create jsPDF instance (A4 size landscape: 297mm x 210mm)
   const pdf = new jsPDF({
-    orientation: 'portrait',
+    orientation: 'landscape',
     unit: 'mm',
     format: 'a4',
   });
 
-  const pageWidth = 210;
-  const pageHeight = 297;
+  const pageWidth = 297;
+  const pageHeight = 210;
   let isFirstPage = true;
   let processedItems = 0;
 
@@ -104,7 +104,7 @@ export async function generateBatchPDF(
         const imgWidth = pageWidth - (margin * 2);
         const imgHeight = pageHeight - (margin * 2);
         
-        pdf.addImage(base64Data, 'JPEG', margin, margin, imgWidth, imgHeight, undefined, 'FAST');
+        pdf.addImage(base64Data, 'PNG', margin, margin, imgWidth, imgHeight, undefined, 'NONE');
 
       } catch (err) {
         console.error('Failed to embed scan image in PDF:', err);

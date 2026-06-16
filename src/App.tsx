@@ -244,12 +244,12 @@ export default function App() {
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
         canvas.toBlob(async (blob) => {
           if (blob) {
-            const compressed = await compressPhoto(blob, 1);
+            const compressed = await compressPhoto(blob, 2048);
             await saveCapturedImage(compressed);
             triggerHapticFeedback();
             showBriefToast('Scanned single page');
           }
-        }, 'image/jpeg', 1);
+        }, 'image/png');
       }
     } catch (err) {
       console.error('Camera canvas snapshot failed:', err);
@@ -388,7 +388,7 @@ export default function App() {
           triggerHapticFeedback();
           showBriefToast('Generated original scanned page');
         }
-      }, 'image/jpeg', 0.85);
+      }, 'image/png');
     }
   };
 

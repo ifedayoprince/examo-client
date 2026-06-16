@@ -14,9 +14,9 @@ export class ExamoClientDatabase extends Dexie {
 
 export const db = new ExamoClientDatabase();
 
-// Utility helper to compress captured images
-// Re-scales high-res mobile photos to prevent bloating client-side storage while preserving perfect readability
-export async function compressPhoto(fileOrBlob: Blob, maxWidth = 1200, quality = 0.75): Promise<Blob> {
+// Utility helper to process captured images in highest quality PNG format
+// Lossless format ensuring perfect readability for scanned documents
+export async function compressPhoto(fileOrBlob: Blob, maxWidth = 2048): Promise<Blob> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = (event) => {
@@ -26,7 +26,7 @@ export async function compressPhoto(fileOrBlob: Blob, maxWidth = 1200, quality =
         let width = img.width;
         let height = img.height;
 
-        // Maintain scale
+        // Maintain scale - only downscale if extremely large (> maxWidth) to avoid canvas size limits
         if (width > maxWidth) {
           height = Math.round((height * maxWidth) / width);
           width = maxWidth;
@@ -50,8 +50,7 @@ export async function compressPhoto(fileOrBlob: Blob, maxWidth = 1200, quality =
               resolve(fileOrBlob); // fallback
             }
           },
-          'image/jpeg',
-          quality
+          'image/png'
         );
       };
       img.onerror = () => resolve(fileOrBlob); // fallback
