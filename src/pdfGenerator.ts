@@ -13,18 +13,32 @@ const blobToBase64 = (blob: Blob): Promise<string> => {
   });
 };
 
+// Retrieves original image dimensions to preserve aspect ratio
+const getImageDimensions = (base64: string): Promise<{ width: number; height: number }> => {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      resolve({ width: img.naturalWidth || img.width, height: img.naturalHeight || img.height });
+    };
+    img.onerror = () => {
+      resolve({ width: 0, height: 0 });
+    };
+    img.src = base64;
+  });
+};
+
 export async function generateBatchPDF(
   scanItems: ScanItem[],
   onProgress?: (progress: number) => void
 ): Promise<{ blob: Blob; filename: string; pageCount: number; sizeBytes: number }> {
-  // Create jsPDF instance (A4 size landscape: 297mm x 210mm)
+  // Create jsPDF instance (4:3 aspect ratio landscape: 280mm x 210mm)
   const pdf = new jsPDF({
     orientation: 'landscape',
     unit: 'mm',
-    format: 'a4',
+    format: [280, 210],
   });
 
-  const pageWidth = 297;
+  const pageWidth = 280;
   const pageHeight = 210;
   let isFirstPage = true;
   let processedItems = 0;
@@ -101,10 +115,35 @@ export async function generateBatchPDF(
         // Render image in pure white block, taking maximum printable container bounds
         // Offset padding around edges to match clean scan styles (12mm bounds)
         const margin = 4;
-        const imgWidth = pageWidth - (margin * 2);
-        const imgHeight = pageHeight - (margin * 2);
+        const maxImgWidth = pageWidth - (margin * 2);
+        const maxImgHeight = pageHeight - (margin * 2);
+
+        // Preserve aspect ratio
+        const { width: imgOrigWidth, height: imgOrigHeight } = await getImageDimensions(base64Data);
         
-        pdf.addImage(base64Data, 'PNG', margin, margin, imgWidth, imgHeight, undefined, 'NONE');
+        let printWidth = maxImgWidth;
+        let printHeight = maxImgHeight;
+        
+        if (imgOrigWidth > 0 && imgOrigHeight > 0) {
+          const pageRatio = maxImgWidth / maxImgHeight;
+          const imgRatio = imgOrigWidth / imgOrigHeight;
+          
+          if (imgRatio > pageRatio) {
+            // Image is wider than the printable area's aspect ratio
+            printWidth = maxImgWidth;
+            printHeight = maxImgWidth / imgRatio;
+          } else {
+            // Image is taller than the printable area's aspect ratio
+            printHeight = maxImgHeight;
+            printWidth = maxImgHeight * imgRatio;
+          }
+        }
+
+        // Center the image within the margins
+        const xOffset = margin + (maxImgWidth - printWidth) / 2;
+        const yOffset = margin + (maxImgHeight - printHeight) / 2;
+        
+        pdf.addImage(base64Data, 'PNG', xOffset, yOffset, printWidth, printHeight, undefined, 'NONE');
 
       } catch (err) {
         console.error('Failed to embed scan image in PDF:', err);
